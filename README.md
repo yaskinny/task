@@ -1,14 +1,14 @@
 # Task
 
-## Nginx
+### Nginx
 There are two roles in this repository. _fw_ and _nginx_.
 
 _nginx_ role will install and configure a Nginx server.
 
 Within the task it is specified that cache storage size memory must be 2GB. It's not clear what "cache storage" refers to. There're three possibilites for that:  
-1- Memory size which Nginx uses to keep cache keys
-2- Storage size on disk to use for cached files
-3- Mount 2GB of memory and use it for caching files
+1- Memory size which Nginx uses to keep cache keys  
+2- Storage size on disk to use for cached files  
+3- Mount 2GB of memory and use it for caching files  
 
 
 It's possible to do any of these by this role with setting vars:
@@ -120,7 +120,8 @@ nginx_log_file_path: /var/log/nginx/cache-server.log
 
 _fw_ role configs websesrver firewall. As described within the task, Server has 2 NICs. One private/LAN network and communicates with a DNS and application server. Also remote ssh access is allowed on this interface. Another one is facing public/WAN network. On WAN side only inbound traffic on port 8099/tcp is allowed for the webserver.
 
-It's mentioned in the task that webserver will communicate to the back-end application using hostname. Since the IPtables just resolve the domain on rule creation, it'll be a static IP in the rule. If back-end application ip changes, Nginx will not be able to communicate with the back-end. I allowed outbound traffic to tcp port 8099 on private CIDR. **This is vulnerable to DNS spoofing and make it possible to pivoting for an attacker(can be leveraged for reverse shell, downloading scripts/exploits/... and ...).**. It is set to log SYN packets to the back-end before allowing them to make early detection possible and usable for incident response.
+It's mentioned in the task that webserver will communicate to the back-end application using hostname. Since the IPtables just resolve the domain on rule creation, it'll be a static IP in the rule. If back-end application ip changes, Nginx will not be able to communicate with the back-end. I allowed outbound traffic to back-end tcp port on private interface.  
+***NOTE:*** **This is vulnerable to DNS spoofing and make pivoting possible for an attacker(can be leveraged for reverse shell, downloading scripts/exploits/... and ...).**. It is set to log SYN packets to the back-end before allowing them to make early detection possible and usable for incident response.
 
 
 **variables**:
