@@ -1,0 +1,29 @@
+---
+nginx_package_update: false
+
+nginx_enable_http2: false
+
+nginx_cache_dir_path: /var/cache/nginx
+nginx_backend_port_number: 8080
+nginx_local_dns_addr: 192.168.104.1
+nginx_local_dns_ttl: 15s
+nginx_local_dns_time_out: 3s
+
+nginx_cache_storage_max_size: 2g
+nginx_cache_key_memory_size: 250m
+
+nginx_certs_dir: /etc/nginx/.certs
+nginx_enable_ssl: false
+nginx_create_selfsigned_cert: false
+nginx_server_names: []
+nginx_ssc_cn: ""
+nginx_ssc_sans: []
+nginx_ssc_dir: "{{ playbook_dir }}/pki"
+# nginx_ssl_crt_path: '/path'
+# nginx_ssl_key_path: '/path'
+# nginx_ssl_dhparam_path: '/path'
+# nginx_ssl_chain_path: '/path'
+nginx_enable_ocsp: false
+nginx_log_file_path: /var/log/nginx/cache-server.log
+
+nginx_use_tempfs_for_cache: false

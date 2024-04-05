@@ -1,0 +1,70 @@
+---
+- name: Fw | ansible.builtin.assert | check if fw_private_interface_name address is private
+  ansible.builtin.assert:
+    that:
+    - "{{ ('ansible_' + fw_private_interface_name) }}.ipv4.address | ansible.builtin.ipaddr('private')"
+
+- name: Fw | ansible.builtin.apt | Uninstall UFW/Firewalld if they are installed
+  become: true
+  tags:
+  - fw
+  ansible.builtin.apt:
+    name:
+    - firewalld
+    - ufw
+    state: absent
+
+- name: Fw | ansible.builtin.apt | install iptables-persistent
+  become: true
+  tags:
+  - fw
+  ansible.builtin.apt:
+    name: iptables-persistent
+    state: present
+    update_cache: true
+    cache_valid_time: 1200
+
+- name: Fw | ansible.builtin.systemd_service | make sure iptables-persistent service is enabled
+  become: true
+  tags:
+  - fw
+  ansible.builtin.systemd_service:
+    enabled: true
+    name: iptables
+
+- name: Established/Related states
+  tags:
+  - fw
+  become: true
+  ansible.builtin.import_tasks: ctstate.yaml
+
+- name: Nginx / DNS / upstream app server rules
+  tags:
+  - fw
+  become: true
+  ansible.builtin.import_tasks: nginx.yaml
+
+  ## !NOTE:
+  ## Although it is specified within the task to allow only webserver traffic in the firewall,
+  ## not configuring SSH rules will make connecting to the server impossible.
+  ## I've made SSH rules optional, so you can ignore them by setting fw_ssh_access to false.
+- name: SSH Rules
+  tags:
+  - fw
+  become: true
+  ansible.builtin.import_tasks: bastion.yaml
+  when: fw_ssh_access | bool
+
+- name: Chains
+  tags:
+  - fw
+  become: true
+  ansible.builtin.import_tasks: chains.yaml
+
+- name: Fw | community.general.iptables_state | save applied rules for persistence between boots
+  tags:
+  - fw
+  become: true
+  community.general.iptables_state:
+    state: saved
+    path: /etc/iptables/rules.v4

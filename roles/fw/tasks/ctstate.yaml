@@ -1,0 +1,39 @@
+---
+## !NOTE:
+## Accept established/related packets as soon as possible for better performance
+- name: Fw | ansible.builtin.iptables | accept established/related packets - INPUT
+  ansible.builtin.iptables:
+    table: filter
+    chain: INPUT
+    state: present
+    action: append
+    ctstate: ESTABLISHED,RELATED
+    jump: ACCEPT
+
+- name: Fw | ansible.builtin.iptables | accept established/related packets - OUTPUT
+  ansible.builtin.iptables:
+    table: filter
+    chain: OUTPUT
+    state: present
+    action: append
+    ctstate: ESTABLISHED,RELATED
+    jump: ACCEPT
+
+- name: Fw | ansible.builtin.iptables | allow loopback -> loopback - INPUT
+  ansible.builtin.iptables:
+    table: filter
+    chain: INPUT
+    state: present
+    action: append
+    in_interface: lo
+    jump: ACCEPT
+
+- name: Fw | ansible.builtin.iptables | allow loopback -> loopback - OUTPUT
+  ansible.builtin.iptables:
+    table: filter
+    chain: OUTPUT
+    state: present
+    action: append
+    out_interface: lo
+    jump: ACCEPT
+...

@@ -1,0 +1,24 @@
+---
+version: '3.9'
+
+services:
+  dns:
+    container_name: coredns
+    image: coredns/coredns:v1.11.1
+    ports:
+    - 192.168.104.1:53:53/udp
+    - 192.168.104.1:53:53/tcp
+    volumes:
+    - ${PWD}/coredns:/etc/coredns
+    working_dir: /etc/coredns
+    entrypoint: /coredns -conf ./Corefile
+
+  application:
+    container_name: upstream-app
+    image: nginx:alpine
+    ports:
+    - 8080:8080
+    volumes:
+    - ${PWD}/static-site:/static-site
+    - ${PWD}/default.conf:/etc/nginx/conf.d/default.conf
+...

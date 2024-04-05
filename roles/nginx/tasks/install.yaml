@@ -1,0 +1,91 @@
+---
+- name: Install nginx
+  become: true
+  tags:
+  - nginx
+  - nginx_install
+  block:
+  - name: Nginx | ansible.builtin.apt | install nginx
+    vars:
+      __pkg_state: "{{ nginx_package_update | ternary('latest', 'present') }}"
+    ansible.builtin.apt:
+      name: nginx-extras
+      state: "{{ __pkg_state }}"
+      update_cache: true
+      cache_valid_time: "{{ '0' if __pkg_state == 'latest' else '1200' }}"
+
+  - name: Nginx | ansible.builtin.file | remove nginx default web
+    ansible.builtin.file:
+      path: "/etc/nginx/sites-enabled/default"
+      state: absent
+    notify: Nginx | reload nginx
+
+  - name: Nginx | ansible.builtin.systemd_service | make sure nginx service is enabled
+    ansible.builtin.systemd_service:
+      name: nginx
+      enabled: true
+
+  - name: Nginx | ansible.builtin.file | create directory to keep certificates
+    ansible.builtin.file:
+      path: "{{ nginx_certs_dir }}"
+      state: directory
+      owner: root
+      group: root
+      mode: '0750'
+
+  - name: Nginx | ansible.builtin.file | create directory for cached files
+    ansible.builtin.file:
+      path: "{{ nginx_cache_dir_path }}"
+      state: directory
+      owner: www-data
+      group: www-data
+      mode: "0750"
+
+- name: Resolved config
+  become: true
+  tags:
+  - nginx
+  - nginx_dns
+  block:
+  - name: Nginx | ansible.builtin.file | create resolved.conf.d directory
+    ansible.builtin.file:
+      path: "/etc/systemd/resolved.conf.d"
+      state: directory
+      owner: root
+      group: root
+      mode: '0755'
+
+  - name: Nginx | ansible.builtin.template | copy neshar.org domain config for resolved
+    ansible.builtin.template:
+      src: neshan-org.conf.j2
+      dest: "/etc/systemd/resolved.conf.d/neshan-org.conf"
+      owner: root
+      group: root
+      mode: '0644'
+    register: __resolved_conf
+
+  - name: Nginx | ansible.builtin.systemd_service | restart resolved to pickup new config
+    ansible.builtin.systemd_service: # noqa: no-handler
+      state: restarted
+      name: systemd-resolved
+      enabled: true
+    when: __resolved_conf is changed
+
+- name: TempFS
+  tags:
+  - nginx
+  - nginx_install
+  become: true
+  when: nginx_use_tempfs_for_cache | bool
+  block:
+  - name: Nginx | ansible.builtin.lineinfile | create fstab entry for nginx cache
+    ansible.builtin.lineinfile:
+      path: /etc/fstab
+      state: present
+      line: 'tmpfs {{ nginx_cache_dir_path }} tmpfs size={{ nginx_cache_storage_max_size }},mode=644,noexec,nosuid 0 0'
+
+  - name: Nginx | ansible.builtin.command | mount tempfs
+    ansible.builtin.command: # noqa: command-instead-of-module
+      cmd: "mount {{ nginx_cache_dir_path }}"
+    changed_when: false
+...

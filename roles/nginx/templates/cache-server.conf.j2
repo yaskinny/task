@@ -1,0 +1,72 @@
+proxy_cache_path
+  {{ nginx_cache_dir_path }}
+  levels=1:2
+  keys_zone=webapp:{{ nginx_cache_key_memory_size }}
+  inactive=5m
+  max_size={{ nginx_cache_storage_max_size }}
+  manager_files=200
+  manager_threshold=2s
+  manager_sleep=25s
+  loader_files=200;
+
+upstream test-app {
+  server test.neshan.org:{{ nginx_backend_port_number }};
+  keepalive 8;
+}
+
+log_format cacheserver '"$time_local" - client="$remote_addr" - method="$request_method" - status="$status" - uri="$uri" - cache_status="$upstream_cache_status" - upstream_status="$upstream_status" - request_time="$request_time" - upstream_response_time="$upstream_response_time" - upstream_connec t_time="$upstream_connect_time" - upstream_header_time="$upstream_header_time" - body_bytes_sent="$body_bytes_sent"';
+
+server_tokens off;
+
+server {
+  listen 8089 {{ 'ssl' if nginx_enable_ssl }} {{ 'http2' if nginx_enable_http2 }};
+  access_log {{ nginx_log_file_path }} cacheserver buffer=16k flush=1m;
+  error_log {{ nginx_log_file_path }}.err;
+  
+  resolver {{ nginx_local_dns_addr }} valid={{ nginx_local_dns_ttl | default('45s') }};
+  resolver_timeout {{ nginx_local_dns_time_out | default('3s') }};
+  
+  {% if nginx_server_names is defined and nginx_server_names | length > 0  %}
+  server_name {{ nginx_server_names | join(' ') }};
+  {% endif %}
+
+  {% if nginx_enable_ssl | bool %}
+  ssl_protocols TLSv1.3 TLSv1.2;
+  ssl_prefer_server_ciphers on;
+  ssl_ciphers HIGH:!aNULL:!MD5;
+  ssl_session_cache shared:SSL:15m;
+  ssl_certificate {{ nginx_certs_dir }}/server.crt;
+  ssl_certificate_key {{ nginx_certs_dir }}/server.pem;
+  {% if nginx_ssl_chain_path is defined %}
+  ssl_trusted_certificate {{ nginx_certs_dir }}/chain.crt;
+  {% endif %}
+  {% if nginx_ssl_dhparam_path is defined %}
+  ssl_dhparam {{ nginx_certs_dir }}/dhparam;
+  {% endif %}
+
+  {% if nginx_enable_ocsp %}
+  ssl_stapling on;
+  ssl_stapling_verify on;
+  {% endif %}
+  {% endif %}
+    
+  location / {
+    proxy_pass http://test-app/;
+
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+    proxy_cache_key $uri;
+    proxy_cache_valid 200 5m;
+    proxy_cache_valid any 1m;
+    proxy_cache_min_uses 1;
+    proxy_cache webapp;
+    proxy_cache_lock on;
+    proxy_cache_lock_age 3s;
+    proxy_cache_lock_timeout 3s;
+      
+    add_header x-cache $upstream_cache_status;
+  }
+}

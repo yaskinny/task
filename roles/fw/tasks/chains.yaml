@@ -1,0 +1,14 @@
+---
+## !NOTE:
+## make default policy for INPUT/OUTPUT/FORWARD chain on DROP
+
+- name: Fw | ansible.builtin.iptables | set default policy on drop
+  ansible.builtin.iptables:
+    chain: "{{ item }}"
+    state: present
+    policy: DROP
+  loop:
+  - INPUT
+  - OUTPUT
+  - FORWARD
+...

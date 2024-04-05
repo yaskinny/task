@@ -1,0 +1,7 @@
+---
+galaxy_info:
+  author: Yaser Kalali
+  description: Configure IPtables
+  company: Neshan
+  license: MIT
+  min_ansible_version: "2.10"

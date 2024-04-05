@@ -1,0 +1,27 @@
+---
+profile:
+loop_var_prefix: ^(__|{role}_)
+var_naming_pattern: "[a-z_][a-z0-9_]*$"
+use_default_rules: true
+skip_list:
+- jinja[spacing]
+- meta-video-links
+- meta-runtime
+- meta-no-tags
+- meta-incorrect
+- schema[meta]
+enable_list:
+- args
+- avoid-implicit
+- complexit
+- loop-var-prefix
+- command-instead-of-module
+- command-instead-of-shell
+- deprecated-local-action
+- deprecated-module
+- empty-string-compare
+- no-log-password
+- no-same-owner
+- name[prefix]
+- yaml
+offline: true

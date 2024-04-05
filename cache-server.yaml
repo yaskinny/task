@@ -1,0 +1,8 @@
+---
+- name: Cache server
+  hosts: cache
+
+
+  roles:
+  - role: nginx
+  - role: fw

@@ -1,0 +1,181 @@
+---
+- name: Nginx Generate Certs
+  become: false
+  tags:
+  - nginx
+  - nginx_config
+  - nginx_pki
+  when: >-
+    nginx_enable_ssl | bool
+    and
+    nginx_create_selfsigned_cert | bool
+  delegate_to: localhost
+  vars:
+    __username: "{{ lookup('ansible.builtin.env', 'USER') }}"
+  block:
+  - name: PKI | ansible.builtin.file | Create directory to keep pki related files
+    ansible.builtin.file:
+      path: "{{ nginx_ssc_dir }}"
+      state: directory
+      owner: "{{ __username }}"
+      group: "{{ __username }}"
+      mode: '0750'
+
+  - name: PKI | community.crypto.openssl_privatekey | Generate CA private key
+    community.crypto.openssl_privatekey:
+      path: "{{ nginx_ssc_dir }}/CA.pem"
+      size: 4096
+      type: RSA
+      owner: "{{ __username }}"
+      group: "{{ __username }}"
+      mode: "0600"
+      state: present
+
+  - name: PKI | community.crypto.openssl_csr | Generate CA CSR
+    community.crypto.openssl_csr:
+      path: "{{ nginx_ssc_dir }}/CA.csr"
+      mode: "0600"
+      privatekey_path: "{{ nginx_ssc_dir }}/CA.pem"
+      common_name: "Demo CA"
+      organizational_unit_name: "Webapps"
+      organization_name: "Demo"
+      key_usage_critical: true
+      key_usage:
+      - keyCertSign
+      - cRLSign
+      basic_constraints_critical: true
+      basic_constraints:
+      - CA:TRUE
+      create_subject_key_identifier: true
+      use_common_name_for_san: false
+
+  - name: PKI | community.crypto.x509_certificate | Issue CA certificate
+    community.crypto.x509_certificate:
+      path: "{{ nginx_ssc_dir }}/CA.crt"
+      csr_path: "{{ nginx_ssc_dir }}/CA.csr"
+      privatekey_path: "{{ nginx_ssc_dir }}/CA.pem"
+      provider: selfsigned
+      owner: "{{ __username }}"
+      group: "{{ __username }}"
+      mode: "0600"
+      selfsigned_not_after: "+131400h"
+
+  - name: PKI | community.crypto.openssl_privatekey | Generate server private key
+    community.crypto.openssl_privatekey:
+      path: "{{ nginx_ssl_key_path }}"
+      size: 4096
+      type: RSA
+      owner: "{{ __username }}"
+      group: "{{ __username }}"
+      mode: "0600"
+      state: present
+
+  - name: PKI | community.crypto.openssl_csr | Generate server CSR
+    vars:
+      ## add nginx CN of certificate to SANs
+      _nginx_ssc_sans: "{{ nginx_ssc_sans + [nginx_ssc_cn] }}"
+      ## prefix each SAN with 'DNS:'
+      __nginx_ssc_sans: "{{ _nginx_ssc_sans | map('regex_replace', '^(.*)$', 'DNS:\\1') | list }}"
+    community.crypto.openssl_csr:
+      path: "{{ nginx_ssc_dir }}/server.csr"
+      mode: "0600"
+      privatekey_path: "{{ nginx_ssl_key_path }}"
+      key_usage_critical: true
+      common_name: "{{ nginx_ssc_cn | default('cache.neshan.org') }}"
+      subject_alt_name: "{{ __nginx_ssc_sans }}"
+      subject_alt_name_critical: true
+      key_usage:
+      - keyEncipherment
+      - digitalSignature
+      extended_key_usage_critical: true
+      extended_key_usage:
+      - serverAuth
+      basic_constraints_critical: true
+      basic_constraints:
+      - CA:FALSE
+      create_subject_key_identifier: true
+
+  - name: PKI | community.crypto.x509_certificate | Generate server certificate
+    community.crypto.x509_certificate:
+      provider: ownca
+      path: "{{ nginx_ssl_crt_path }}"
+      csr_path: "{{ nginx_ssc_dir }}/server.csr"
+      ownca_path: "{{ nginx_ssc_dir }}/CA.crt"
+      ownca_privatekey_path: "{{ nginx_ssc_dir }}/CA.pem"
+      ownca_not_after: "+720h"
+      owner: "{{ __username }}"
+      group: "{{ __username }}"
+      mode: "0600"
+
+  - name: PKI | ansible.builtin.debug | warning message
+    ansible.builtin.debug:
+      msg: |-
+        PLEASE DO NOT:
+          - COMMIT PKI RELATED FILES IN THE REPOSITORY
+          - DON'T LEAVE PKI RELATED FILES ON DISK
+
+  - name: PKI | ansible.builtin.pause | pause a little so user can read the message
+    ansible.builtin.pause:
+      seconds: 5
+
+- name: Nginx Certs
+  become: true
+  tags:
+  - nginx
+  - nginx_config
+  when: nginx_enable_ssl | bool
+  notify: Nginx | reload nginx
+  block:
+  - name: Nginx | ansible.builtin.assert | check cert/key is provided
+    ansible.builtin.assert:
+      that:
+      - nginx_ssl_crt_path is defined
+      - nginx_ssl_crt_path | length > 0
+      - nginx_ssl_key_path is defined
+      - nginx_ssl_key_path | length > 0
+      fail_msg: "ssl is enabled but path to certificate and key is NOT provided"
+
+  - name: Nginx | ansible.builtin.copy | copy certificate and key
+    ansible.builtin.copy:
+      src: "{{ item.s }}"
+      dest: "{{ item.d }}"
+      owner: root
+      group: root
+      mode: '0640'
+    loop:
+    - s: "{{ nginx_ssl_crt_path }}"
+      d: "{{ nginx_certs_dir }}/server.crt"
+
+    - s: "{{ nginx_ssl_key_path }}"
+      d: "{{ nginx_certs_dir }}/server.pem"
+
+  - name: Nginx | ansible.builtin.copy | copy certificate and key
+    ansible.builtin.copy:
+      src: "{{ item.s }}"
+      dest: "{{ item.d }}"
+      owner: root
+      group: root
+      mode: '0640'
+    loop:
+    - s: "{{ nginx_ssl_crt_path }}"
+      d: "{{ nginx_certs_dir }}/server.crt"
+    - s: "{{ nginx_ssl_key_path }}"
+      d: "{{ nginx_certs_dir }}/server.pem"
+
+  - name: Nginx | ansible.builtin.copy | copy chain
+    when: nginx_ssl_chain_path is defined
+    ansible.builtin.copy:
+      src: "{{ nginx_ssl_chain_path }}"
+      dest: "{{ nginx_certs_dir }}/chain.crt"
+      owner: root
+      group: root
+      mode: '0640'
+
+  - name: Nginx | ansible.builtin.copy | copy dh
+    when: nginx_ssl_dhparam_path is defined
+    ansible.builtin.copy:
+      src: "{{ nginx_ssl_dhparam_path }}"
+      dest: "{{ nginx_certs_dir }}/dhparam"
+      owner: root
+      group: root
+      mode: '0640'

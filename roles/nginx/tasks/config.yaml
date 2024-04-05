@@ -1,0 +1,14 @@
+---
+- name: Nginx | ansible.builtin.template | copy nginx config template
+  tags:
+  - nginx
+  - nginx_config
+  become: true
+  ansible.builtin.template:
+    src: cache-server.conf.j2
+    dest: /etc/nginx/conf.d/cache-server.conf
+    mode: '0644'
+    owner: root
+    group: root
+  notify: Nginx | reload nginx
+...

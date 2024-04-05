@@ -1,0 +1,132 @@
+---
+## !NOTE:
+## since web traffic here is our priority first of all we write webserver IN/OUT rules for better performance
+- name: Fw | ansible.builtin.iptables | create a new chain for the web
+  ansible.builtin.iptables:
+    table: filter
+    chain: WEBSERVER
+    chain_management: true
+
+- name: Fw | ansible.builtin.iptables | send packets to WEBSERVER chain
+  ansible.builtin.iptables:
+    table: filter
+    chain: INPUT
+    state: present
+    action: append
+    protocol: tcp
+    destination_port: 8089
+    jump: WEBSERVER
+
+- name: Fw | ansible.builtin.iptables | accept new connections nginx
+  ansible.builtin.iptables:
+    table: filter
+    chain: WEBSERVER
+    state: present
+    action: append
+    protocol: tcp
+    destination_port: 8089
+    ctstate: NEW
+    jump: ACCEPT
+
+## !NOTE:
+## accept any packet that is not matched with established/related rules and it's not a SYN packet.
+## purpose is to mitigate dropping established connections when we lose states for any reason.
+- name: Fw | ansible.builtin.iptables | accept non SYN packets
+  ansible.builtin.iptables:
+    table: filter
+    chain: WEBSERVER
+    state: present
+    action: append
+    protocol: tcp
+    destination_port: 8089
+    syn: negate
+    jump: ACCEPT
+
+## !NOTE:
+## a packet shouldn't reach this rule ever. just to make sure if it ever happens, packet does not traverse
+## the rest of the firewall rules
+- name: Fw | ansible.builtin.iptables | drop anything else - WEBSERVER
+  ansible.builtin.iptables:
+    table: filter
+    chain: WEBSERVER
+    state: present
+    action: append
+    jump: DROP
+
+## WEB APP
+- name: Fw | ansible.builtin.iptables | create a new chain for upstream webapp
+  ansible.builtin.iptables:
+    table: filter
+    chain: UPSTREAMWEB
+    chain_management: true
+
+- name: Fw | ansible.builtin.iptables | send packets to UPSTREAMWEB chain
+  ansible.builtin.iptables:
+    table: filter
+    chain: OUTPUT
+    state: present
+    action: append
+    protocol: tcp
+    destination_port: "{{ fw_upstream_app_port }}"
+    jump: UPSTREAMWEB
+
+- name: Fw | ansible.builtin.iptables | log syn packets
+  ansible.builtin.iptables:
+    table: filter
+    chain: UPSTREAMWEB
+    state: present
+    action: append
+    protocol: tcp
+    destination_port: "{{ fw_upstream_app_port }}"
+    out_interface: "{{ fw_private_interface_name }}"
+    syn: match
+    log_prefix: "IPTABLES:WEBAPP:SYN "
+    log_level: info
+    jump: LOG
+
+- name: Fw | ansible.builtin.iptables | allow new connections
+  ansible.builtin.iptables:
+    table: filter
+    chain: UPSTREAMWEB
+    state: present
+    action: append
+    protocol: tcp
+    destination_port: "{{ fw_upstream_app_port }}"
+    out_interface: "{{ fw_private_interface_name }}"
+    ctstate: NEW
+    jump: ACCEPT
+
+- name: Fw | ansible.builtin.iptables | accept non SYN packets
+  ansible.builtin.iptables:
+    table: filter
+    chain: UPSTREAMWEB
+    state: present
+    action: append
+    protocol: tcp
+    destination_port: "{{ fw_upstream_app_port }}"
+    out_interface: "{{ fw_private_interface_name }}"
+    syn: negate
+    jump: ACCEPT
+
+- name: Fw | ansible.builtin.iptables | drop anything else - UPSTREAMWEB
+  ansible.builtin.iptables:
+    table: filter
+    chain: UPSTREAMWEB
+    state: present
+    action: append
+    jump: DROP
+
+## DNS server
+- name: Fw | ansible.builtin.iptables | allow output to local dns server
+  ansible.builtin.iptables:
+    table: filter
+    chain: OUTPUT
+    state: present
+    action: append
+    protocol: "{{ fw_dns_protocol }}"
+    destination_port: "{{ fw_dns_server_port_number }}"
+    destination: "{{ fw_dns_server_address }}"
+    out_interface: "{{ fw_private_interface_name }}"
+    ctstate: NEW
+    jump: ACCEPT
+...

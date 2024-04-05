@@ -1,0 +1,54 @@
+---
+- name: Fw | ansible.builtin.iptables | create a new chain for SSH
+  ansible.builtin.iptables:
+    table: filter
+    chain: SSH
+    chain_management: true
+
+- name: Fw | ansible.builtin.iptables | send packets to SSH chain
+  ansible.builtin.iptables:
+    table: filter
+    chain: INPUT
+    state: present
+    action: append
+    protocol: tcp
+    destination_port: 22
+    jump: SSH
+
+- name: Fw | ansible.builtin.iptables | accept new connections from trusted host
+  ansible.builtin.iptables:
+    table: filter
+    chain: SSH
+    state: present
+    action: append
+    protocol: tcp
+    destination_port: 22
+    in_interface: "{{ fw_private_interface_name }}"
+    source: "{{ fw_bastion_host_ip }}"
+    ctstate: NEW
+    jump: ACCEPT
+
+## !NOTE:
+## accept any packet that is not matched with established/related rules and it's not a SYN packet.
+## purpose is to mitigate dropping established connections when we lose states of them for any reason.
+- name: Fw | ansible.builtin.iptables | accept non syn packets
+  ansible.builtin.iptables:
+    table: filter
+    chain: SSH
+    state: present
+    action: append
+    protocol: tcp
+    destination_port: 22
+    in_interface: "{{ fw_private_interface_name }}"
+    source: "{{ fw_bastion_host_ip }}"
+    syn: negate
+    jump: ACCEPT
+
+- name: Fw | ansible.builtin.iptables | drop anything else - SSH
+  ansible.builtin.iptables:
+    table: filter
+    chain: SSH
+    state: present
+    action: append
+    jump: DROP
+...

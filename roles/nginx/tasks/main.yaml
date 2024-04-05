@@ -1,0 +1,10 @@
+---
+- name: Install Nginx
+  ansible.builtin.import_tasks: install.yaml
+
+- name: Certs
+  ansible.builtin.import_tasks: cert.yaml
+
+- name: Config Nginx
+  ansible.builtin.import_tasks: config.yaml
+...
